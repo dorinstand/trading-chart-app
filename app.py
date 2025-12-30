@@ -2,8 +2,11 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import talib
 import pandas as pd
+from ta.momentum import RSIIndicator
+from ta.trend import MACD
+from ta.volatility import BollingerBands
+from ta.patterns import CDL_DOJI, CDL_HAMMER, CDL_ENGULFING, CDL_SHOOTINGSTAR  # Candlestick patterns
 
 st.set_page_config(page_title="Trading Chart Analyzer", layout="wide")
 st.title("📈 Trading Chart Pattern & Indicator Detector")
@@ -27,21 +30,26 @@ if st.button("🔍 Load & Analyze Chart"):
         if data.empty or len(data) < 50:
             st.error("No data found or insufficient data for this ticker/period.")
         else:
-            # Indicators
-            data['RSI'] = talib.RSI(data['Close'], timeperiod=14)
-            data['MACD'], data['MACD_signal'], _ = talib.MACD(data['Close'])
-            upper, middle, lower = talib.BBANDS(data['Close'], timeperiod=20)
-            data['BB_upper'] = upper
-            data['BB_middle'] = middle
-            data['BB_lower'] = lower
-            
-            # Candlestick patterns (100 = bullish, -100 = bearish)
-            data['Doji'] = talib.CDLDOJI(data['Open'], data['High'], data['Low'], data['Close'])
-            data['Hammer'] = talib.CDLHAMMER(data['Open'], data['High'], data['Low'], data['Close'])
-            data['Engulfing'] = talib.CDLENGULFING(data['Open'], data['High'], data['Low'], data['Close'])
-            data['ShootingStar'] = talib.CDLSHOOTINGSTAR(data['Open'], data['High'], data['Low'], data['Close'])
+            # === Indicators using 'ta' library ===
+            rsi_indicator = RSIIndicator(close=data['Close'], window=14)
+            data['RSI'] = rsi_indicator.rsi()
 
-            # Plot
+            macd_indicator = MACD(close=data['Close'])
+            data['MACD'] = macd_indicator.macd()
+            data['MACD_signal'] = macd_indicator.macd_signal()
+
+            bb_indicator = BollingerBands(close=data['Close'], window=20, window_dev=2)
+            data['BB_upper'] = bb_indicator.bollinger_hband()
+            data['BB_middle'] = bb_indicator.bollinger_mavg()
+            data['BB_lower'] = bb_indicator.bollinger_lband()
+
+            # === Candlestick Patterns (returns 100, -100, or 0) ===
+            data['Doji'] = CDL_DOJI(data['Open'], data['High'], data['Low'], data['Close'])
+            data['Hammer'] = CDL_HAMMER(data['Open'], data['High'], data['Low'], data['Close'])
+            data['Engulfing'] = CDL_ENGULFING(data['Open'], data['High'], data['Low'], data['Close'])
+            data['ShootingStar'] = CDL_SHOOTINGSTAR(data['Open'], data['High'], data['Low'], data['Close'])
+
+            # === Plotting ===
             fig = make_subplots(
                 rows=4, cols=1,
                 shared_xaxes=True,
@@ -95,11 +103,12 @@ if st.button("🔍 Load & Analyze Chart"):
             fig.update_layout(height=1000, xaxis_rangeslider_visible=False, title=f"{ticker} Analysis")
             st.plotly_chart(fig, use_container_width=True)
 
-            # Recent patterns
+            # Recent patterns table
             patterns = data[(data['Doji'] != 0) | (data['Hammer'] != 0) | 
                             (data['Engulfing'] != 0) | (data['ShootingStar'] != 0)].tail(15)
             if not patterns.empty:
                 st.subheader("🕯️ Recent Candlestick Patterns Detected")
-                st.dataframe(patterns[['Doji', 'Hammer', 'Engulfing', 'ShootingStar']].replace({100: 'Bullish', -100: 'Bearish', 0: ''}))
-            
-            st.success("Analysis complete! Remember: This is educational only – not financial advice.")
+                display_patterns = patterns[['Doji', 'Hammer', 'Engulfing', 'ShootingStar']].replace({100: 'Bullish', -100: 'Bearish', 0: ''})
+                st.dataframe(display_patterns)
+
+            st.success("Analysis complete! Educational purposes only – not financial advice.")
