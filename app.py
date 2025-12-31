@@ -9,13 +9,11 @@ from ta.volatility import BollingerBands
 
 # --- Manual Candlestick Pattern Detection Functions ---
 def detect_doji(open_, high, low, close, tolerance=0.1):
-    """Detect Doji: body very small compared to range"""
     body = abs(open_ - close)
     range_ = high - low
     return body <= tolerance * range_
 
 def detect_hammer(open_, high, low, close):
-    """Detect Bullish Hammer: small upper body, long lower shadow"""
     body = abs(open_ - close)
     range_ = high - low
     lower_shadow = min(open_, close) - low
@@ -23,7 +21,6 @@ def detect_hammer(open_, high, low, close):
     return (lower_shadow >= 2 * body) and (upper_shadow <= body) and (body <= 0.3 * range_)
 
 def detect_shooting_star(open_, high, low, close):
-    """Detect Bearish Shooting Star: small lower body, long upper shadow"""
     body = abs(open_ - close)
     range_ = high - low
     upper_shadow = high - max(open_, close)
@@ -31,18 +28,16 @@ def detect_shooting_star(open_, high, low, close):
     return (upper_shadow >= 2 * body) and (lower_shadow <= body) and (body <= 0.3 * range_)
 
 def detect_bullish_engulfing(open_, high, low, close):
-    """Detect Bullish Engulfing: current green candle fully engulfs previous red candle"""
     prev_open, prev_close = open_.shift(1), close.shift(1)
     bullish_engulf = (
-        (prev_close < prev_open) &  # previous bearish
-        (close > open_) &           # current bullish
-        (open_ < prev_close) &      # opens below previous close
-        (close > prev_open)         # closes above previous open
+        (prev_close < prev_open) &
+        (close > open_) &
+        (open_ < prev_close) &
+        (close > prev_open)
     )
     return bullish_engulf
 
 # -------------------------------------------------------
-
 st.set_page_config(page_title="Trading Chart Analyzer", layout="wide")
 st.title("📈 Trading Chart Pattern & Indicator Detector")
 
@@ -65,7 +60,11 @@ if st.button("🔍 Load & Analyze Chart"):
         if data.empty or len(data) < 50:
             st.error("No data found or insufficient data for this ticker/period.")
         else:
-            # Indicators (using 'ta' library - reliable on Streamlit Cloud)
+            # === THIS IS THE ONLY NEW LINE THAT FIXES YOUR ERROR ===
+            data = data.reset_index(drop=True)
+            # =======================================================
+
+            # Indicators
             data['RSI'] = RSIIndicator(close=data['Close'], window=14).rsi()
             macd = MACD(close=data['Close'])
             data['MACD'] = macd.macd()
@@ -76,13 +75,13 @@ if st.button("🔍 Load & Analyze Chart"):
             data['BB_middle'] = bb.bollinger_mavg()
             data['BB_lower'] = bb.bollinger_lband()
 
-            # Candlestick Patterns (manual detection - returns 100 for bullish, -100 for bearish where applicable)
+            # Candlestick Patterns
             data['Doji'] = detect_doji(data['Open'], data['High'], data['Low'], data['Close']).astype(int) * 100
             data['Hammer'] = detect_hammer(data['Open'], data['High'], data['Low'], data['Close']).astype(int) * 100
             data['ShootingStar'] = detect_shooting_star(data['Open'], data['High'], data['Low'], data['Close']).astype(int) * (-100)
             data['Engulfing'] = detect_bullish_engulfing(data['Open'], data['High'], data['Low'], data['Close']).astype(int) * 100
 
-            # Plot
+            # Plot (dates are still shown correctly on the x-axis)
             fig = make_subplots(
                 rows=4, cols=1,
                 shared_xaxes=True,
@@ -91,58 +90,53 @@ if st.button("🔍 Load & Analyze Chart"):
                 vertical_spacing=0.05
             )
 
-            # Candlestick
+            original_dates = yf.download(ticker, period=period, interval=interval, progress=False).index
+
             fig.add_trace(go.Candlestick(
-                x=data.index, open=data['Open'], high=data['High'],
+                x=original_dates, open=data['Open'], high=data['High'],
                 low=data['Low'], close=data['Close'], name="Price"
             ), row=1, col=1)
 
-            # Bollinger Bands
-            fig.add_trace(go.Scatter(x=data.index, y=data['BB_upper'], name="Upper BB", line=dict(color="gray", dash="dash")), row=1, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['BB_middle'], name="Middle BB", line=dict(color="blue")), row=1, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['BB_lower'], name="Lower BB", line=dict(color="gray", dash="dash")), row=1, col=1)
+            fig.add_trace(go.Scatter(x=original_dates, y=data['BB_upper'], name="Upper BB", line=dict(color="gray", dash="dash")), row=1, col=1)
+            fig.add_trace(go.Scatter(x=original_dates, y=data['BB_middle'], name="Middle BB", line=dict(color="blue")), row=1, col=1)
+            fig.add_trace(go.Scatter(x=original_dates, y=data['BB_lower'], name="Lower BB", line=dict(color="gray", dash="dash")), row=1, col=1)
 
-            # Pattern markers
             hammer = data[data['Hammer'] == 100]
             if not hammer.empty:
-                fig.add_trace(go.Scatter(x=hammer.index, y=hammer['Low'] * 0.98, mode='markers',
+                fig.add_trace(go.Scatter(x=original_dates[hammer.index], y=hammer['Low'] * 0.98, mode='markers',
                                          marker=dict(symbol='triangle-up', size=15, color='lime'),
                                          name='Bullish Hammer'), row=1, col=1)
 
             doji = data[data['Doji'] == 100]
             if not doji.empty:
-                fig.add_trace(go.Scatter(x=doji.index, y=doji['Close'], mode='markers',
+                fig.add_trace(go.Scatter(x=original_dates[doji.index], y=doji['Close'], mode='markers',
                                          marker=dict(symbol='diamond', size=12, color='yellow'),
                                          name='Doji'), row=1, col=1)
 
             engulfing = data[data['Engulfing'] == 100]
             if not engulfing.empty:
-                fig.add_trace(go.Scatter(x=engulfing.index, y=engulfing['Low'] * 0.98, mode='markers',
+                fig.add_trace(go.Scatter(x=original_dates[engulfing.index], y=engulfing['Low'] * 0.98, mode='markers',
                                          marker=dict(symbol='arrow-up', size=14, color='green'),
                                          name='Bullish Engulfing'), row=1, col=1)
 
             shooting = data[data['ShootingStar'] == -100]
             if not shooting.empty:
-                fig.add_trace(go.Scatter(x=shooting.index, y=shooting['High'] * 1.02, mode='markers',
+                fig.add_trace(go.Scatter(x=original_dates[shooting.index], y=shooting['High'] * 1.02, mode='markers',
                                          marker=dict(symbol='triangle-down', size=15, color='red'),
                                          name='Shooting Star'), row=1, col=1)
 
-            # MACD
-            fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name="MACD"), row=2, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['MACD_signal'], name="Signal"), row=2, col=1)
+            fig.add_trace(go.Scatter(x=original_dates, y=data['MACD'], name="MACD"), row=2, col=1)
+            fig.add_trace(go.Scatter(x=original_dates, y=data['MACD_signal'], name="Signal"), row=2, col=1)
 
-            # RSI
-            fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name="RSI", line=dict(color="purple")), row=3, col=1)
+            fig.add_trace(go.Scatter(x=original_dates, y=data['RSI'], name="RSI", line=dict(color="purple")), row=3, col=1)
             fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
             fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
 
-            # Volume
-            fig.add_trace(go.Bar(x=data.index, y=data['Volume'], name="Volume"), row=4, col=1)
+            fig.add_trace(go.Bar(x=original_dates, y=data['Volume'], name="Volume"), row=4, col=1)
 
             fig.update_layout(height=1000, xaxis_rangeslider_visible=False, title=f"{ticker} Analysis")
             st.plotly_chart(fig, use_container_width=True)
 
-            # Recent patterns table
             patterns = data[(data['Doji'] != 0) | (data['Hammer'] != 0) | 
                             (data['Engulfing'] != 0) | (data['ShootingStar'] != 0)].tail(15)
             if not patterns.empty:
