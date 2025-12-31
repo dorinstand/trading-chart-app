@@ -58,13 +58,14 @@ if st.button("🔍 Load & Analyze Chart"):
         data = yf.download(ticker, period=period, interval=interval, progress=False)
         
         if data.empty or len(data) < 50:
-            st.error("No data found or insufficient data for this ticker/period.")
+            st.error("No data found or insufficient data for this ticker/period. Try a different interval or wait a minute (rate limit possible).")
         else:
-            # === FIX: Ensure Close (and other columns) are 1D Series ===
-            data['Close'] = data['Close'].squeeze()
-            data['Open'] = data['Open'].squeeze()
-            data['High'] = data['High'].squeeze()
-            data['Low'] = data['Low'].squeeze()
+            # === ROBUST FIX: Force all OHLC to clean 1D Series ===
+            data['Close'] = pd.Series(data['Close'].values.flatten(), index=data.index)
+            data['Open'] = pd.Series(data['Open'].values.flatten(), index=data.index)
+            data['High'] = pd.Series(data['High'].values.flatten(), index=data.index)
+            data['Low'] = pd.Series(data['Low'].values.flatten(), index=data.index)
+            data['Volume'] = pd.Series(data['Volume'].values.flatten(), index=data.index)
             # =======================================================
 
             # Indicators
