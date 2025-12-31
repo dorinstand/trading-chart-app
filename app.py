@@ -60,8 +60,11 @@ if st.button("🔍 Load & Analyze Chart"):
         if data.empty or len(data) < 50:
             st.error("No data found or insufficient data for this ticker/period.")
         else:
-            # === THIS IS THE ONLY NEW LINE THAT FIXES YOUR ERROR ===
-            data = data.reset_index(drop=True)
+            # === FIX: Ensure Close (and other columns) are 1D Series ===
+            data['Close'] = data['Close'].squeeze()
+            data['Open'] = data['Open'].squeeze()
+            data['High'] = data['High'].squeeze()
+            data['Low'] = data['Low'].squeeze()
             # =======================================================
 
             # Indicators
@@ -81,7 +84,7 @@ if st.button("🔍 Load & Analyze Chart"):
             data['ShootingStar'] = detect_shooting_star(data['Open'], data['High'], data['Low'], data['Close']).astype(int) * (-100)
             data['Engulfing'] = detect_bullish_engulfing(data['Open'], data['High'], data['Low'], data['Close']).astype(int) * 100
 
-            # Plot (dates are still shown correctly on the x-axis)
+            # Plot
             fig = make_subplots(
                 rows=4, cols=1,
                 shared_xaxes=True,
@@ -90,49 +93,47 @@ if st.button("🔍 Load & Analyze Chart"):
                 vertical_spacing=0.05
             )
 
-            original_dates = yf.download(ticker, period=period, interval=interval, progress=False).index
-
             fig.add_trace(go.Candlestick(
-                x=original_dates, open=data['Open'], high=data['High'],
+                x=data.index, open=data['Open'], high=data['High'],
                 low=data['Low'], close=data['Close'], name="Price"
             ), row=1, col=1)
 
-            fig.add_trace(go.Scatter(x=original_dates, y=data['BB_upper'], name="Upper BB", line=dict(color="gray", dash="dash")), row=1, col=1)
-            fig.add_trace(go.Scatter(x=original_dates, y=data['BB_middle'], name="Middle BB", line=dict(color="blue")), row=1, col=1)
-            fig.add_trace(go.Scatter(x=original_dates, y=data['BB_lower'], name="Lower BB", line=dict(color="gray", dash="dash")), row=1, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['BB_upper'], name="Upper BB", line=dict(color="gray", dash="dash")), row=1, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['BB_middle'], name="Middle BB", line=dict(color="blue")), row=1, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['BB_lower'], name="Lower BB", line=dict(color="gray", dash="dash")), row=1, col=1)
 
             hammer = data[data['Hammer'] == 100]
             if not hammer.empty:
-                fig.add_trace(go.Scatter(x=original_dates[hammer.index], y=hammer['Low'] * 0.98, mode='markers',
+                fig.add_trace(go.Scatter(x=hammer.index, y=hammer['Low'] * 0.98, mode='markers',
                                          marker=dict(symbol='triangle-up', size=15, color='lime'),
                                          name='Bullish Hammer'), row=1, col=1)
 
             doji = data[data['Doji'] == 100]
             if not doji.empty:
-                fig.add_trace(go.Scatter(x=original_dates[doji.index], y=doji['Close'], mode='markers',
+                fig.add_trace(go.Scatter(x=doji.index, y=doji['Close'], mode='markers',
                                          marker=dict(symbol='diamond', size=12, color='yellow'),
                                          name='Doji'), row=1, col=1)
 
             engulfing = data[data['Engulfing'] == 100]
             if not engulfing.empty:
-                fig.add_trace(go.Scatter(x=original_dates[engulfing.index], y=engulfing['Low'] * 0.98, mode='markers',
+                fig.add_trace(go.Scatter(x=engulfing.index, y=engulfing['Low'] * 0.98, mode='markers',
                                          marker=dict(symbol='arrow-up', size=14, color='green'),
                                          name='Bullish Engulfing'), row=1, col=1)
 
             shooting = data[data['ShootingStar'] == -100]
             if not shooting.empty:
-                fig.add_trace(go.Scatter(x=original_dates[shooting.index], y=shooting['High'] * 1.02, mode='markers',
+                fig.add_trace(go.Scatter(x=shooting.index, y=shooting['High'] * 1.02, mode='markers',
                                          marker=dict(symbol='triangle-down', size=15, color='red'),
                                          name='Shooting Star'), row=1, col=1)
 
-            fig.add_trace(go.Scatter(x=original_dates, y=data['MACD'], name="MACD"), row=2, col=1)
-            fig.add_trace(go.Scatter(x=original_dates, y=data['MACD_signal'], name="Signal"), row=2, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name="MACD"), row=2, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['MACD_signal'], name="Signal"), row=2, col=1)
 
-            fig.add_trace(go.Scatter(x=original_dates, y=data['RSI'], name="RSI", line=dict(color="purple")), row=3, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name="RSI", line=dict(color="purple")), row=3, col=1)
             fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
             fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
 
-            fig.add_trace(go.Bar(x=original_dates, y=data['Volume'], name="Volume"), row=4, col=1)
+            fig.add_trace(go.Bar(x=data.index, y=data['Volume'], name="Volume"), row=4, col=1)
 
             fig.update_layout(height=1000, xaxis_rangeslider_visible=False, title=f"{ticker} Analysis")
             st.plotly_chart(fig, use_container_width=True)
