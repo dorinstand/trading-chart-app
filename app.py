@@ -60,12 +60,12 @@ if st.button("🔍 Load & Analyze Chart"):
         if data.empty or len(data) < 50:
             st.error("No data found or insufficient data for this ticker/period. Try a different interval or wait a minute (rate limit possible).")
         else:
-            # === ROBUST FIX: Force all OHLC to clean 1D Series ===
-            data['Close'] = pd.Series(data['Close'].values.flatten(), index=data.index)
-            data['Open'] = pd.Series(data['Open'].values.flatten(), index=data.index)
-            data['High'] = pd.Series(data['High'].values.flatten(), index=data.index)
-            data['Low'] = pd.Series(data['Low'].values.flatten(), index=data.index)
-            data['Volume'] = pd.Series(data['Volume'].values.flatten(), index=data.index)
+            # === ROBUST FIX: Force all OHLCV to clean 1D Series ===
+            data['Close'] = pd.Series(data['Close'].values.ravel(), index=data.index)
+            data['Open'] = pd.Series(data['Open'].values.ravel(), index=data.index)
+            data['High'] = pd.Series(data['High'].values.ravel(), index=data.index)
+            data['Low'] = pd.Series(data['Low'].values.ravel(), index=data.index)
+            data['Volume'] = pd.Series(data['Volume'].values.ravel(), index=data.index)
             # =======================================================
 
             # Indicators
