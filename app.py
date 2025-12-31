@@ -58,14 +58,14 @@ if st.button("🔍 Load & Analyze Chart"):
         data = yf.download(ticker, period=period, interval=interval, progress=False)
         
         if data.empty or len(data) < 50:
-            st.error("No data found or insufficient data for this ticker/period. Try a different interval or wait a minute (rate limit possible).")
+            st.error("No data found or insufficient data for this ticker/period. Try a longer period/interval or wait a minute (Yahoo may rate-limit requests).")
         else:
-            # === ROBUST FIX: Force all OHLCV to clean 1D Series ===
-            data['Close'] = pd.Series(data['Close'].values.ravel(), index=data.index)
-            data['Open'] = pd.Series(data['Open'].values.ravel(), index=data.index)
-            data['High'] = pd.Series(data['High'].values.ravel(), index=data.index)
-            data['Low'] = pd.Series(data['Low'].values.ravel(), index=data.index)
-            data['Volume'] = pd.Series(data['Volume'].values.ravel(), index=data.index)
+            # === FINAL FIX: Squeeze all columns to ensure 1D data ===
+            data['Open'] = data['Open'].squeeze()
+            data['High'] = data['High'].squeeze()
+            data['Low'] = data['Low'].squeeze()
+            data['Close'] = data['Close'].squeeze()
+            data['Volume'] = data['Volume'].squeeze()
             # =======================================================
 
             # Indicators
